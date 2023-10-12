@@ -90,7 +90,7 @@ class IsotropicPhaseSpaceSolver():
         
         self._setup_interpolators()
         
-    def sample_particles(self, ntot=10000, rmax=None, seed=None, verbose=False, res_of_r=None):
+    def sample_particles(self, ntot=10000, rmax=None, seed=None, verbose=False, res_of_r=None, rmin=None):
         """Samples particles consistent with the phasespace distribution
         
         ntot : number of particles to sample
@@ -112,7 +112,7 @@ class IsotropicPhaseSpaceSolver():
         if rmax is None:
             rmax = self.rnorm
             
-        ri, mass = self._sample_r(ntot, rmax=rmax, res_of_r=res_of_r)
+        ri, mass = self._sample_r(ntot, rmax=rmax, res_of_r=res_of_r, rmin=rmin)
         ei = self._sample_e_given_r(ri, verbose=verbose)
         
         pos = mathtools.random_direction(ri.shape, 3) * ri[...,np.newaxis]
@@ -289,29 +289,35 @@ class IsotropicPhaseSpaceSolver():
         
         return r**2 * np.sqrt(2.*de)  * self.f_of_e(e, use_profile_f=use_profile_f) / norm
     
-    def _sample_r(self, ntot=100, rmax=None, res_of_r=None):
+    def _sample_r(self, ntot=100, rmax=None, res_of_r=None, rmin=None):
         """Sample radii and masses from the density profile, 
         res_of_r can be a function increasing resolution and decreasing mass"""
         if rmax is None:
             rmax = self.rnorm
+        if rmin is None:
+            mmin = 0.
             
         if res_of_r is None:
             mofr = self.profile.self_m_of_r(self.ri)
             mmax = self.profile.self_m_of_r(rmax)
+            if rmin is not None:
+                mmin = self.profile.self_m_of_r(rmin)
             fsamp = np.random.uniform(0., 1., ntot)
-            rsamp = np.interp(fsamp, mofr/mmax, self.ri)
-            mass = np.ones(ntot) * (mmax / ntot)
+            rsamp = np.interp(fsamp, (mofr-mmin)/(mmax-mmin), self.ri)
+            mass = np.ones(ntot) * ((mmax-mmin) / ntot)
         else:
             def dmdr(r):
                 return 4.*np.pi*self.profile.self_density(r)*r**2 * res_of_r(r)
 
             meff = self.profile.self_m_of_r(self.ri[0]) + mathtools.cum_simpson(dmdr, self.ri)
             mmax = np.interp(rmax, self.ri, meff)
+            if rmin is not None:
+                mmin = np.interp(rmin, self.ri, meff)
 
             fsamp = np.random.uniform(0., 1., ntot)
-            rsamp = np.interp(fsamp, meff/mmax, self.ri)
+            rsamp = np.interp(fsamp, (meff-mmin)/(mmax-mmin), self.ri)
 
-            mass = mmax / ntot / res_of_r(rsamp)
+            mass = (mmax-mmin) / ntot / res_of_r(rsamp)
         mass[np.isnan(mass)] = 0.
 
         return rsamp, mass
@@ -319,20 +325,24 @@ class IsotropicPhaseSpaceSolver():
         def sample_r(ntot):
             if res_of_r is None:
                 mmax = self.self_m_of_r(rmax)
+                if rmin is not None:
+                    mmin = self.self_m_of_r(rmin)
                 fsamp = np.random.uniform(0., 1., ntot)
-                rsamp = np.interp(fsamp, self.q["mofr"]/mmax, self.ri)
-                mass = np.ones(ntot) * (mmax / ntot)
+                rsamp = np.interp(fsamp, (self.q["mofr"]-mmin)/(mmax-mmin), self.ri)
+                mass = np.ones(ntot) * ((mmax-mmin) / ntot)
             else:
                 def dmdr(r):
                     return 4.*np.pi*self.self_density(r)*r**2 * res_of_r(r)
                 
                 meff = self.prof_initial.self_m_of_r(self.ri[0]) + mathtools.cum_simpson(dmdr, self.ri)
                 mmax = np.interp(rmax, self.ri, meff)
+                if rmin is not None:
+                    mmin = np.interp(rmin, self.ri, meff)
                 
                 fsamp = np.random.uniform(0., 1., ntot)
-                rsamp = np.interp(fsamp, meff/mmax, self.ri)
+                rsamp = np.interp(fsamp, (meff-mmin)/(mmax-mmin), self.ri)
                 
-                mass = mmax / ntot / res_of_r(rsamp)
+                mass = (mmax-mmin) / ntot / res_of_r(rsamp)
 
             return rsamp, mass
         

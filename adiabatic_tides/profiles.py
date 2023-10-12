@@ -116,7 +116,7 @@ class RadialProfile():
         raise NotImplementedError("This is an abstract class, please implement a subclass")
         
     #----------- Optional features, that can be helpful in some situations ----------#
-    def sample_particles(self, ntot=10000, rmax=None, seed=42):
+    def sample_particles(self, ntot=10000, rmax=None, seed=42, rmin=None):
         """Abstract: Sample particles' positions, velocities and masses"""
         raise NotImplementedError("This optional function has not been implemented")
     
@@ -1197,12 +1197,12 @@ class NFWProfile(RadialProfile):
         
         return res * self.m_of_r(self.r0())
 
-    def sample_particles(self, ntot=10000, rmax=None, seed=None):
+    def sample_particles(self, ntot=10000, rmax=None, seed=None, rmin=None):
         """Sample particles' positions, velocities and masses consistent with the NFW profile"""
         if not self.phasespace_initialized:
             self._initialize_phasespace()
         
-        return self.pss.sample_particles(ntot=ntot, rmax=rmax, seed=seed)
+        return self.pss.sample_particles(ntot=ntot, rmax=rmax, seed=seed, rmin=rmin)
 
     def daccdr(self, r):
         """Radial derivative of the acceleration"""
@@ -1533,13 +1533,13 @@ class NumericalProfile(RadialProfile):
         
         return f
     
-    def sample_particles(self, ntot=10000, rmax=None, seed=None, res_of_r=None):
+    def sample_particles(self, ntot=10000, rmax=None, seed=None, res_of_r=None, rmin=None):
         """Sample particles' positions, velocities and masses consistent with the Numerical profile
         for more info see PhaseSpaceSolver.sample_particles"""
         if not self.phasespace_initialized:
             self._initialize_phasespace()
         
-        return self.pss.sample_particles(ntot=ntot, rmax=rmax, seed=seed, res_of_r=res_of_r)
+        return self.pss.sample_particles(ntot=ntot, rmax=rmax, seed=seed, res_of_r=res_of_r, rmin=rmin)
     
 class MonteCarloProfile(RadialProfile):
     def __init__(self, ri=None, mi=None, base_profile=None, rmax=None, rmin=None, nbins=1000, rbins=None, ancorphi="rmax", from_dict=None):
@@ -2461,7 +2461,7 @@ class AdiabaticProfile(RadialProfile):
         
         return pos, vel, mass #, rsamp, e, l
         
-    def sample_particles(self, ntot=1e4, rmax=None, seed=None, extra_outputs=False):
+    def sample_particles(self, ntot=1e4, rmax=None, seed=None, extra_outputs=False, rmin=None):
         """Samples particles, by sampling the initial profile and reweighting their
         masses so that they match the final profile
         
@@ -2475,7 +2475,7 @@ class AdiabaticProfile(RadialProfile):
         if rmax is None:
             rmax = np.min([self._rtid, self.r0()])
         
-        pos,vel,mass = self.prof_initial.sample_particles(ntot=ntot, rmax=rmax, seed=seed)
+        pos,vel,mass = self.prof_initial.sample_particles(ntot=ntot, rmax=rmax, seed=seed, rmin=rmin)
         
         r, e0, L = self.prof_initial.posvel_to_rEL(pos, vel)
         efinal = self.potential(r) + 0.5*np.sum(vel**2, axis=-1)
